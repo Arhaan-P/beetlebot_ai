@@ -22,8 +22,8 @@ from std_srvs.srv import Trigger
 # PATHS
 # ============================================================
 
-MODEL_PATH = "/home/student/beetlebot_ai/traffic_sign_model.h5"
-CSV_PATH = "/home/student/beetlebot_ai/traffic_sign.csv"
+MODEL_PATH = "/home/veerobot/beetlebot_ai/traffic_sign_model.h5"
+CSV_PATH = "/home/veerobot/beetlebot_ai/traffic_sign.csv"
 
 CAMERA_TOPIC = "/pi_camera/image_raw"
 CMD_VEL_TOPIC = "/cmd_vel"
@@ -390,8 +390,8 @@ class TrafficSignDetector(Node):
             cv2.waitKey(1)
 
 
-        except Exception:
-            pass
+        except Exception as e:
+            self.get_logger().error(f"Frame processing error: {e}")
 
 
 # ============================================================
