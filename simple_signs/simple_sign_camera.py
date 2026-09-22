@@ -8,6 +8,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
+from std_srvs.srv import Trigger
 
 import tensorflow as tf
 import numpy as np
@@ -29,7 +30,7 @@ CLASSES = ["background", "forward", "left", "stop"]
 # duration_sec is None for actions that hold until the next trigger.
 SIGN_ACTIONS = {
     "forward": (0.15, 0.0, 3.0),
-    "left": (0.0, 0.3, 3.0),
+    "left": (0.05, 1.0, 3.0),
     "stop": (0.0, 0.0, None),
 }
 
@@ -51,6 +52,20 @@ class SimpleSignDetector(Node):
         self.last_action_class = None
         self.last_action_time = 0.0
         self._action_timer = None
+
+        self._arm_robot()
+
+    def _arm_robot(self):
+        client = self.create_client(Trigger, "/lyra/arm")
+
+        if not client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().warn("Arm service /lyra/arm not available")
+            return
+
+        future = client.call_async(Trigger.Request())
+        future.add_done_callback(
+            lambda f: self.get_logger().info(f"Arm result: {f.result()}")
+        )
 
     def _publish_twist(self, linear_x, angular_z):
         msg = Twist()
