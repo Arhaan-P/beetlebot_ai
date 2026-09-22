@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# ROS2 / colcon
+build/
+install/
+log/
+
+# OS / editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
