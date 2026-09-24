@@ -29,19 +29,19 @@ CAMERA_TOPICS = ["/pi_camera/image_raw", "/camera/image_raw"]  # whichever one t
 CMD_VEL_TOPIC = "/cmd_vel_nav"
 VIEW_TOPIC = "/sign_bot/image"   # annotated feed: boxes, labels, current action
 RATE_HZ = 20          # same as `ros2 topic pub -r 20`
-STABLE_FRAMES = 3     # sign must be seen this many frames in a row before acting
+STABLE_FRAMES = 2    # sign must be seen this many frames in a row before acting
 COOLDOWN_SEC = 4.0    # same sign is ignored this long after its action finishes
 DRY_RUN = "--dry-run" in sys.argv
 
 # sign -> steps of (linear.x m/s, angular.z rad/s, seconds). angular.z +ve = left.
 # Calibration knobs: tune speeds/durations on the real robot.
 ACTIONS = {
-    "go_slow":             [(0.05, 0.0, 3.0)],                     # creep forward
-    "speed_up":            [(0.25, 0.0, 2.0)],                     # fast forward (= -r 20 -t 40)
-    "pedestrian_crossing": [(0.0, 0.0, 3.0), (0.08, 0.0, 2.0)],    # stop and wait, then proceed
-    "road_closed":         [(0.0, 0.0, 1.0), (-0.1, 0.0, 2.0)],    # stop, then back away
-    "u_turn_ahead":        [(0.1, 1.0, math.pi)],                  # 180 deg arc
-    "roundabout_ahead":    [(0.12, 0.8, 2 * math.pi / 0.8)],       # one full loop
+    "go_slow":             [(0.15, 0.0, 3.0)],                     # creep forward
+    "speed_up":            [(0.5, 0.0, 2.0)],                      # fast forward
+    "pedestrian_crossing": [(0.0, 0.0, 3.0), (0.25, 0.0, 2.0)],    # stop and wait, then proceed
+    "road_closed":         [(0.0, 0.0, 1.0), (-0.3, 0.0, 2.0)],    # stop, then back away
+    "u_turn_ahead":        [(0.25, 2.0, math.pi / 2.0)],           # 180 deg arc
+    "roundabout_ahead":    [(0.3, 1.5, 2 * math.pi / 1.5)],        # one full loop
 }
 
 
@@ -85,6 +85,8 @@ class SignBot(Node):
         self.streak_name, self.streak = None, 0
         self.finished_at = {}   # sign -> time its last action finished
         self.last_frame_time = time.monotonic()
+        self.frames = 0
+        self.create_timer(5.0, self.check_camera)
 
         if DRY_RUN:
             self.get_logger().warn("DRY RUN: nothing will be published on " + CMD_VEL_TOPIC)
@@ -130,7 +132,16 @@ class SignBot(Node):
         linear_x, angular_z, _ = self.steps[0]
         self.send(linear_x, angular_z)
 
+    def check_camera(self):
+        if self.frames == 0:
+            self.get_logger().warn(
+                f"No camera frames yet on {CAMERA_TOPICS}. Check: ros2 topic hz /pi_camera/image_raw "
+                "(is robot.launch.py running with camera:=true, and same ROS_DOMAIN_ID?)")
+
     def on_image(self, msg):
+        if self.frames == 0:
+            self.get_logger().info(f"First camera frame: {msg.width}x{msg.height} {msg.encoding}")
+        self.frames += 1
         try:
             frame = to_rgb(msg)
             det = find_sign(frame, self.locator, self.classifier)
@@ -182,6 +193,12 @@ class SignBot(Node):
 def open_window(node):
     """Open the camera window (rqt_image_view on the annotated feed) if there's a display."""
     if os.environ.get("DISPLAY") and shutil.which("ros2"):
+        have = subprocess.run(["ros2", "pkg", "prefix", "rqt_image_view"],
+                              capture_output=True).returncode == 0
+        if not have:
+            node.get_logger().warn("rqt_image_view not installed: sudo apt install ros-jazzy-rqt-image-view "
+                                   f"(or run it on your PC on {VIEW_TOPIC})")
+            return None
         node.get_logger().info(f"Opening window: rqt_image_view {VIEW_TOPIC}")
         return subprocess.Popen(["ros2", "run", "rqt_image_view", "rqt_image_view", VIEW_TOPIC])
     node.get_logger().warn(f"No display here. On your PC run: ros2 run rqt_image_view rqt_image_view {VIEW_TOPIC}")

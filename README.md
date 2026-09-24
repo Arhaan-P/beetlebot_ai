@@ -4,12 +4,12 @@
 
 | Sign | Movement |
 |------|----------|
-| Go Slow | creep forward: `linear.x=0.05`, `angular.z=0`, 3s |
-| Speed Up | fast forward: `linear.x=0.25`, `angular.z=0`, 2s |
-| Pedestrian Crossing | stop 3s, then forward `linear.x=0.08` for 2s |
-| Road Closed | stop 1s, then reverse `linear.x=-0.1` for 2s |
-| U-turn Ahead | 180° turn: `linear.x=0.1`, `angular.z=1.0`, π s |
-| Roundabout Ahead | one full loop: `linear.x=0.12`, `angular.z=0.8`, 7.9s |
+| Go Slow | creep forward: `linear.x=0.15`, `angular.z=0`, 3s |
+| Speed Up | fast forward: `linear.x=0.5`, `angular.z=0`, 2s |
+| Pedestrian Crossing | stop 3s, then forward `linear.x=0.25` for 2s |
+| Road Closed | stop 1s, then reverse `linear.x=-0.3` for 2s |
+| U-turn Ahead | 180° turn: `linear.x=0.25`, `angular.z=2.0`, π/2 s |
+| Roundabout Ahead | one full loop: `linear.x=0.3`, `angular.z=1.5`, 4.2s |
 
 Movement is published on `/cmd_vel_nav` at 20 Hz, with a stop message sent when each action ends.
 
@@ -69,7 +69,7 @@ ros2 run rqt_image_view rqt_image_view /sign_bot/image
 ## What to expect
 
 - The window shows the live camera feed with a coloured box + label (e.g. `Go Slow 97%`) around any detected sign, and a top bar showing the currently running action and its countdown.
-- Hold a sign image steady in front of the camera for ~3 frames; the robot then runs that sign's movement (table above) and returns to looking for signs.
+- Hold a sign image steady in front of the camera for ~2 frames; the robot then runs that sign's movement (table above) and returns to looking for signs.
 - The same sign is ignored for 4s after its action finishes, so it doesn't immediately re-trigger.
 - `Ctrl+C` in terminal B stops the node and sends a stop command.
 
