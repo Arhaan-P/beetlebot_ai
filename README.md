@@ -1,81 +1,81 @@
-# Running this on BeetleBot (ROS2 Jazzy lab)
+# Run instructions (BeetleBot, ROS 2 Jazzy)
 
-## Machines
+## Sign → movement
 
-- **main PC** — your laptop/desktop, `student` user, home dir `/home/student`. Not part of this repo.
-- **robot** — reached via `ssh veerobot@192.168.0.<bot_no>`, home dir `/home/veerobot`. This repo lives there at `/home/veerobot/beetlebot_ai`.
+| Sign | Movement |
+|------|----------|
+| Go Slow | creep forward: `linear.x=0.05`, `angular.z=0`, 3s |
+| Speed Up | fast forward: `linear.x=0.25`, `angular.z=0`, 2s |
+| Pedestrian Crossing | stop 3s, then forward `linear.x=0.08` for 2s |
+| Road Closed | stop 1s, then reverse `linear.x=-0.1` for 2s |
+| U-turn Ahead | 180° turn: `linear.x=0.1`, `angular.z=1.0`, π s |
+| Roundabout Ahead | one full loop: `linear.x=0.12`, `angular.z=0.8`, 7.9s |
 
-Two terminals are used: your **[main PC]** terminal (stays on your PC) and the
-**[robot]** terminal (what you land in after `ssh`). Each step below says which one.
+Movement is published on `/cmd_vel_nav` at 20 Hz, with a stop message sent when each action ends.
 
-The detector script opens an OpenCV window (`cv2.imshow`) showing the live
-camera feed with the detection ROI box, the predicted sign name, and
-confidence — this requires a real display, so SSH needs X11 forwarding
-(step 2 below) or the robot needs a monitor plugged in directly.
+## 1. Clone on the robot
 
-1. **[main PC]** Connect to Wi-Fi **BEETLEBOT_5G** (password `15619xxx`).
+```
+ssh veerobot@192.168.0.<bot_no>          # password: veerobot
+git clone https://github.com/Arhaan-P/beetlebot_ai.git ~/beetlebot_ai
+cd ~/beetlebot_ai
+```
+(Already cloned? `cd ~/beetlebot_ai && git pull` instead.)
 
-2. **[main PC]** SSH into the robot **with X11 forwarding** (this opens the robot terminal):
-   ```
-   ssh -X veerobot@192.168.0.<bot_no>
-   ```
-   (password `veerobot`). On Windows you also need an X server running on
-   your PC first (e.g. [VcXsrv](https://sourceforge.net/projects/vcxsrv/),
-   launched with "Disable access control" checked) — without one, `-X`
-   connects fine but no window will ever appear.
+## 2. Install dependencies (robot, one-time)
 
-3. **[robot]** Source the workspace and set the domain ID:
-   ```
-   source ~/lyra_ws/install/setup.bash
-   export ROS_DOMAIN_ID=<bot_no>
-   ```
+```
+pip3 install --break-system-packages tensorflow numpy
+```
+Nothing else — no OpenCV, no extra ROS packages beyond what `robot.launch.py` already brings in (`rclpy`, `sensor_msgs`, `geometry_msgs`, `std_srvs`). `rqt_image_view` (used in step 5) ships with `ros-jazzy-desktop`; install it with `sudo apt install ros-jazzy-rqt-image-view` if it's missing.
 
-4. **[main PC]** In a separate, non-SSH terminal on your PC, run the same two
-   commands (same `<bot_no>`) so your PC can see the robot.
+## 3. Bring up the robot (terminal A)
 
-5. **[robot]** Bring up the robot:
-   ```
-   cd ~/lyra_ws
-   ros2 launch lyra_bringup robot.launch.py mode:=slam lidar:=true camera:=true
-   ```
+```
+source ~/lyra_ws/install/setup.bash
+export ROS_DOMAIN_ID=<bot_no>
+cd ~/lyra_ws
+ros2 launch lyra_bringup robot.launch.py mode:=slam camera:=true
+```
 
-6. **[robot]** Pull the latest code (repo already cloned at `~/beetlebot_ai`):
-   ```
-   cd ~/beetlebot_ai
-   git pull
-   ```
-   First-time setup only, if the repo isn't there yet:
-   ```
-   git clone https://github.com/Arhaan-P/beetlebot_ai.git ~/beetlebot_ai
-   ```
+## 4. Run the detector (terminal B, on the robot)
 
-7. **[main PC]** Verify topics are live:
-   ```
-   ros2 topic list
-   ```
-   Confirm `/pi_camera/image_raw` and `/cmd_vel` are present.
+```
+source ~/lyra_ws/install/setup.bash
+export ROS_DOMAIN_ID=<bot_no>
+cd ~/beetlebot_ai
+python3 sign_bot.py --dry-run   # first: check detection + window, robot does NOT move
+python3 sign_bot.py             # then: for real, robot moves
+```
 
-8. **[robot]** Run the detector (in the same `-X` SSH terminal from step 2):
-   ```
-   python3 ~/beetlebot_ai/traffic_sign_camera.py
-   ```
-   A window titled "BeetleBot Traffic Sign AI" should pop up on your PC
-   showing the live feed, the yellow detection box, and the predicted sign
-   name/confidence. Log lines (arm result, triggered actions, errors) print
-   in this same terminal.
+If armed automatically fails, arm manually:
+```
+ros2 service call /lyra/arm std_srvs/srv/Trigger
+```
+Emergency stop:
+```
+ros2 service call /lyra/disarm std_srvs/srv/Trigger
+```
 
-   It arms the robot automatically. If arming fails, arm manually:
-   ```
-   ros2 service call /lyra/arm std_srvs/srv/Trigger
-   ```
+## 5. View the camera window (PC)
 
-9. Hold a traffic sign image on your phone in front of the BeetleBot's camera and watch it detect + move.
+```
+source ~/lyra_ws/install/setup.bash
+export ROS_DOMAIN_ID=<bot_no>
+ros2 run rqt_image_view rqt_image_view /sign_bot/image
+```
+(If you SSH'd in with `ssh -X`, `sign_bot.py` opens this window itself — no need to run it separately.)
 
-## Troubleshooting: no camera window appears
+## What to expect
 
-- Confirm you SSH'd with `ssh -X` (not plain `ssh`) and an X server is
-  running on your PC before you connected.
-- Run `echo $DISPLAY` in the robot terminal — if it's empty, X11 forwarding
-  isn't active; reconnect with `-X`.
-- Check the terminal for `Frame processing error:` log lines — the script
-  now logs these instead of failing silently.
+- The window shows the live camera feed with a coloured box + label (e.g. `Go Slow 97%`) around any detected sign, and a top bar showing the currently running action and its countdown.
+- Hold a sign image steady in front of the camera for ~3 frames; the robot then runs that sign's movement (table above) and returns to looking for signs.
+- The same sign is ignored for 4s after its action finishes, so it doesn't immediately re-trigger.
+- `Ctrl+C` in terminal B stops the node and sends a stop command.
+
+## Retrain the model (PC, not required to run the robot)
+
+```
+pip install tensorflow numpy pillow
+python train.py
+```
